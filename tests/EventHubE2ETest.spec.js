@@ -1,10 +1,46 @@
 require("dotenv").config();
-const { test, expect } = require("@playwright/test");
+const { test, expect, request } = require("@playwright/test");
 
 const EMAIL = process.env.EVENTHUB_EMAIL;
 const PASSWORD = process.env.EVENTHUB_PASSWORD;
 
-async function login(page, email, password) {
+const loginPayLoad = { email: EMAIL, password: PASSWORD };
+
+let tokenLogin;
+
+test.beforeAll(async () => {
+  const apiContext = await request.newContext();
+  //Posting a API call and storing the response
+  const loginResponse = await apiContext.post(
+    "https://api.eventhub.rahulshettyacademy.com/api/auth/login",
+    { data: loginPayLoad },
+  );
+
+  //Asserting API call success
+  expect(loginResponse.ok()).toBeTruthy();
+
+  //Storing the response in json
+  const loginResponseJson = await loginResponse.json();
+  tokenLogin = loginResponseJson.token;
+  console.log(tokenLogin);
+});
+
+test.beforeEach(async ({page}) => {
+    await page.addInitScript((value) => {
+    window.localStorage.setItem("eventhub_token", value);
+  }, tokenLogin);
+
+  await page.goto("https://eventhub.rahulshettyacademy.com/");
+
+  //await page.waitForLoadState("networkidle");
+
+  await expect(
+    page.getByRole("link", { name: "Browse Events →" }),
+  ).toBeVisible();
+
+});
+
+/*async function login(page, email, password) {
   await page.goto("https://eventhub.rahulshettyacademy.com/login");
 
   await page.getByLabel("Email").fill(email);
@@ -14,7 +50,7 @@ async function login(page, email, password) {
   await page.getByRole("button", { name: "Sign In" }).click();
 
   await page.waitForLoadState("networkidle");
-}
+}*/
 
 function futureDateValue() {
   const date = new Date();
@@ -43,10 +79,10 @@ test.skip("New Registration on Events hub page", async ({ page }) => {
 });
 
 test("Creating event and Booking of Event feature", async ({ page }) => {
-  await login(page, EMAIL, PASSWORD);
-  await expect(
+  //await login(page, EMAIL, PASSWORD);
+  /*await expect(
     page.getByRole("link", { name: "Browse Events →" }),
-  ).toBeVisible();
+  ).toBeVisible();*/
 
   //Nagigating to Admin -> Events
   await page.getByRole("button", { name: "Admin" }).click();
@@ -151,10 +187,10 @@ test("Creating event and Booking of Event feature", async ({ page }) => {
 });
 
 test("Single ticket booking is eligible for refund", async ({ page }) => {
-  await login(page, EMAIL, PASSWORD);
+  /*await login(page, EMAIL, PASSWORD);
   await expect(
     page.getByRole("link", { name: "Browse Events →" }),
-  ).toBeVisible();
+  ).toBeVisible();*/
 
   //Booking first event with one ticket
   await page.locator("[data-testid='nav-home']").click();
@@ -217,10 +253,10 @@ test("Single ticket booking is eligible for refund", async ({ page }) => {
 });
 
 test("Group ticket booking is NOT eligible for refund", async ({ page }) => {
-  await login(page, EMAIL, PASSWORD);
+  /*await login(page, EMAIL, PASSWORD);
   await expect(
     page.getByRole("link", { name: "Browse Events →" }),
-  ).toBeVisible();
+  ).toBeVisible();*/
 
   await page.locator("[data-testid='nav-home']").click();
 
