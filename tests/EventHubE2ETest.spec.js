@@ -1,5 +1,6 @@
 require("dotenv").config();
 const { test, expect, request } = require("@playwright/test");
+const { APIUtils } = require("./Utils/APIUtils");
 
 const EMAIL = process.env.EVENTHUB_EMAIL;
 const PASSWORD = process.env.EVENTHUB_PASSWORD;
@@ -10,23 +11,13 @@ let tokenLogin;
 
 test.beforeAll(async () => {
   const apiContext = await request.newContext();
-  //Posting a API call and storing the response
-  const loginResponse = await apiContext.post(
-    "https://api.eventhub.rahulshettyacademy.com/api/auth/login",
-    { data: loginPayLoad },
-  );
 
-  //Asserting API call success
-  expect(loginResponse.ok()).toBeTruthy();
-
-  //Storing the response in json
-  const loginResponseJson = await loginResponse.json();
-  tokenLogin = loginResponseJson.token;
-  console.log(tokenLogin);
+  const apiUtils = new APIUtils(apiContext, loginPayLoad);
+  tokenLogin = await apiUtils.getToken()
 });
 
-test.beforeEach(async ({page}) => {
-    await page.addInitScript((value) => {
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript((value) => {
     window.localStorage.setItem("eventhub_token", value);
   }, tokenLogin);
 
@@ -37,7 +28,6 @@ test.beforeEach(async ({page}) => {
   await expect(
     page.getByRole("link", { name: "Browse Events →" }),
   ).toBeVisible();
-
 });
 
 /*async function login(page, email, password) {
