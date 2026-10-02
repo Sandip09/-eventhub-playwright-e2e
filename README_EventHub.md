@@ -42,6 +42,28 @@ End-to-end UI test suite for [EventHub](https://eventhub.rahulshettyacademy.com)
 - State verification across pages (seat count before/after booking, booking reference cross-referenced between pages)
 - Environment-based credential management (no secrets committed to source control)
 
+## Page Object Model (POM)
+
+This suite follows the Page Object Model pattern to keep the tests readable, maintainable, and easier to scale.
+
+### Page object classes
+
+- `EventhubLoginPage.js` – handles login navigation and credential entry
+- `EventhubHomePage.js` – contains home-page navigation and booking actions for the first visible event
+- `EventhubManageEventPage.js` – manages the event creation workflow and form inputs
+- `EventhubEventPage.js` – handles event listing and matching created events on the event page
+- `EventBookingPage.js` – stores booking form fields, ticket count actions, confirmation checks, and booking completion steps
+- `MyBookigPage.js.js` – provides access to the first booking details page from the bookings list
+- `ViewBookingPage.js` – validates booking reference, event title, and refund eligibility result
+- `POManager.js` – centralizes page object creation and returns the relevant page instance to each test
+
+### Why POM is used here
+
+- Separates page actions from test logic
+- Reduces repeated selector code across specs
+- Makes updates easier when the UI changes
+- Improves readability by focusing each test on business behavior instead of low-level DOM steps
+
 ## Project Structure
 
 ```

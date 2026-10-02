@@ -1,6 +1,7 @@
 require("dotenv").config();
 const { test, expect, request } = require("@playwright/test");
 const { APIUtils } = require("./Utils/APIUtils");
+const { POManager } = require("../pageObject/POManager");
 
 const EMAIL = process.env.EVENTHUB_EMAIL;
 const PASSWORD = process.env.EVENTHUB_PASSWORD;
@@ -13,7 +14,7 @@ test.beforeAll(async () => {
   const apiContext = await request.newContext();
 
   const apiUtils = new APIUtils(apiContext, loginPayLoad);
-  tokenLogin = await apiUtils.getToken()
+  tokenLogin = await apiUtils.getToken();
 });
 
 test.beforeEach(async ({ page }) => {
@@ -30,33 +31,6 @@ test.beforeEach(async ({ page }) => {
   ).toBeVisible();
 });
 
-/*async function login(page, email, password) {
-  await page.goto("https://eventhub.rahulshettyacademy.com/login");
-
-  await page.getByLabel("Email").fill(email);
-
-  await page.getByLabel("Password").fill(password);
-
-  await page.getByRole("button", { name: "Sign In" }).click();
-
-  await page.waitForLoadState("networkidle");
-}*/
-
-function futureDateValue() {
-  const date = new Date();
-  date.setDate(date.getDate() + 7);
-
-  const day = String(date.getDate()).padStart(2, "0");
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const year = date.getFullYear();
-
-  const hours = String(date.getHours()).padStart(2, "0");
-  const minutes = String(date.getMinutes()).padStart(2, "0");
-
-  // datetime-local inputs require: YYYY-MM-DDTHH:mm
-  return `${year}-${month}-${day}T${hours}:${minutes}`;
-}
-
 test.skip("New Registration on Events hub page", async ({ page }) => {
   await page.goto("https://eventhub.rahulshettyacademy.com");
   await page.getByText("Register").click();
@@ -68,51 +42,48 @@ test.skip("New Registration on Events hub page", async ({ page }) => {
   await page.locator("#register-btn").click();
 });
 
+test("User can login through the UI", async ({ page }) => {
+  const poManager = new POManager(page);
+  const eventLoginPage = poManager.getEventhubLoginPage();
+
+  await eventLoginPage.goTo();
+  await eventLoginPage.login(EMAIL, PASSWORD);
+
+  await expect(eventLoginPage.eventPage).toBeVisible();
+});
+
 test("Creating event and Booking of Event feature", async ({ page }) => {
-  //await login(page, EMAIL, PASSWORD);
-  /*await expect(
-    page.getByRole("link", { name: "Browse Events →" }),
-  ).toBeVisible();*/
+  const poManager = new POManager(page);
+  const eventhubHomePage = poManager.getEventhubHomePage();
+  const eventManagePage = poManager.getEventhubManageEvent();
+  const eventPage = poManager.getEventhubEventPage();
+  const eventBookingPage = poManager.getEventBookingPage();
 
   //Nagigating to Admin -> Events
-  await page.getByRole("button", { name: "Admin" }).click();
-  await page
-    .getByRole("navigation")
-    .getByRole("link", { name: "Manage Events" })
-    .click();
+  await eventhubHomePage.navigateToAdminManageEvent();
 
   //Creating an Event
-  //Generating a unique event title
-  const eventTitle = `Test Event ${Date.now()}`;
+  const eventTitle = await eventManagePage.fillingEventForm(
+    "Samay Ka Show",
+    "Noida",
+    "ToyBoy",
+    7,
+    4500,
+    500,
+  );
 
-  await page.locator("#event-title-input").fill(eventTitle);
-  await page
-    .getByRole("textbox", { name: "Describe the event…" })
-    .fill("Samay Shows");
-  await page.getByLabel("city").fill("Patna");
-  await page.getByLabel("venue").fill("Gandhi Maidan");
-
-  // Fill future date and time
-  const futureDate = futureDateValue();
-  await page.getByLabel("Event Date & Time").fill(futureDate);
-
-  // Filling price
-  await page.getByRole("spinbutton", { name: "Price ($)*" }).fill("5000");
-
-  //seat
-  await page.getByRole("spinbutton", { name: "Total Seats*" }).fill("100");
-
-  await page.getByTestId("add-event-btn").click();
+  await eventManagePage.addEventButton();
 
   await expect(page.getByText("Event created!")).toBeVisible();
 
   //Going to Event page
-  await page.locator("#nav-events").click();
+  await eventManagePage.eventPageButton();
 
-  const eventCard = page.locator("[data-testid='event-card']");
-  await expect(eventCard.first()).toBeVisible();
+  await expect(eventPage.eventPageItems.first()).toBeVisible();
 
-  const MatchedEventCard = eventCard.filter({ hasText: eventTitle });
+  const MatchedEventCard = eventPage.eventPageItems.filter({
+    hasText: eventTitle,
+  });
 
   await expect(MatchedEventCard).toBeVisible();
 
@@ -128,26 +99,29 @@ test("Creating event and Booking of Event feature", async ({ page }) => {
   await MatchedEventCard.locator("[data-testid='book-now-btn']").click();
 
   //Booking form filling
-  //By default ticket should be 1
-  expect(page.locator("#ticket-count")).toHaveText("1");
 
-  await page.locator("#customerName").fill("Rahul Kumar");
-  await page.locator("#customer-email").fill("rahulraj@gmail.com");
-  await page.getByPlaceholder("+91 98765 43210").fill("+91 6202209178");
-  await page.locator("#confirm-booking").click();
+  //By default ticket should be 1
+  expect(eventBookingPage.ticketLocator).toHaveText("1");
+
+  await eventBookingPage.bookingFill(
+    "Sandip Kumar",
+    "sandip.kumar@gmail.com",
+    "9102309317",
+  );
 
   //Verify booking confirmation
-  await expect(page.getByText("Booking Confirmed! 🎉")).toBeVisible();
+  await expect(eventBookingPage.bookingConfirmLocator).toBeVisible();
 
   //Storing booking ref id
-  const bookingRef = await page.locator(".booking-ref").textContent();
+  const bookingRef = await eventBookingPage.bookingRef.textContent();
 
-  await page.getByRole("button", { name: "View My Bookings" }).click();
+  await eventBookingPage.bookingDone();
 
   await expect(page).toHaveURL(
     "https://eventhub.rahulshettyacademy.com/bookings",
   );
 
+  //My Booking Page
   const bookingCards = page.locator("#booking-card");
   await expect(bookingCards.first()).toBeVisible();
 
@@ -161,7 +135,7 @@ test("Creating event and Booking of Event feature", async ({ page }) => {
 
   //Navigating back to home
   await page.locator("[data-testid='nav-home']").click();
-  await expect(eventCard.first()).toBeVisible();
+  await expect(eventPage.eventPageItems.first()).toBeVisible();
   await expect(MatchedEventCard).toBeVisible();
 
   //Extracting seat count after booking
@@ -177,139 +151,107 @@ test("Creating event and Booking of Event feature", async ({ page }) => {
 });
 
 test("Single ticket booking is eligible for refund", async ({ page }) => {
-  /*await login(page, EMAIL, PASSWORD);
-  await expect(
-    page.getByRole("link", { name: "Browse Events →" }),
-  ).toBeVisible();*/
-
   //Booking first event with one ticket
-  await page.locator("[data-testid='nav-home']").click();
+
+  const poManager = new POManager(page);
+  const eventHomePage = poManager.getEventhubHomePage();
+  const eventBookingPage = poManager.getEventBookingPage();
+  const myBookingPage = poManager.getMyBookingPage();
+  const viewBookingPage = poManager.getViewBookingPage();
 
   // Clicking book now for first event
-  const eventCard = page.locator("[data-testid='event-card']");
-  await eventCard.first().locator("#book-now-btn").click();
+  await eventHomePage.bookFirstEvent();
 
   //Filling details on booking page
   //By default ticket should be 1
-  expect(page.locator("#ticket-count")).toHaveText("1");
+  expect(eventBookingPage.ticketLocator).toHaveText("1");
 
-  await page.locator("#customerName").fill("Pranva Kumar");
-  await page.locator("#customer-email").fill("pranav69@gmail.com");
-  await page.getByPlaceholder("+91 98765 43210").fill("+91 6872209178");
-  await page.locator("#confirm-booking").click();
+  await eventBookingPage.bookingFill(
+    "Rahul",
+    "rahulraj@gmail.com",
+    "8757432510",
+  );
 
   //Verify booking confirmation
-  await expect(page.getByText("Booking Confirmed! 🎉")).toBeVisible();
+  await expect(eventBookingPage.bookingConfirmLocator).toBeVisible();
 
   //Navigating to My Booking page
-  await page.getByRole("button", { name: "View My Bookings" }).click();
+  await eventBookingPage.bookingDone();
 
   await expect(page).toHaveURL(
     "https://eventhub.rahulshettyacademy.com/bookings",
   );
 
   //Clicking the first View Details link
-  await page.getByRole("button", { name: "View Details" }).first().click();
+  await myBookingPage.firstViewDetail();
 
-  await expect(
-    page.getByRole("heading", { name: "Customer Details" }),
-  ).toBeVisible();
+  //View Deatail page
+  await expect(viewBookingPage.customeDetailsLocator).toBeVisible();
 
   //Storing Booking ref to a varibale
-  const bookingRefText = await page
-    .locator("span.font-mono.text-indigo-600")
-    .textContent();
-
-  const bookingRef = bookingRefText.trim();
+  const bookingRef = await viewBookingPage.bookingRefText();
 
   //Storing event title to a varibale
-  const eventTitleText = await page.locator("h1.text-gray-900").textContent();
-
-  const eventTitle = eventTitleText.trim();
+  const eventTitle = await viewBookingPage.eventTitleText();
 
   //First character of booking ref equals first character of event title
   expect(bookingRef.charAt(0)).toBe(eventTitle.charAt(0));
 
   //Check refund eligibility
-  await page.locator("[data-testid='check-refund-btn']").click();
-
-  //Refund text assertion
-  const refundBox = page.locator("#refund-result");
-  await expect(refundBox).toBeVisible();
-  await expect(refundBox).toContainText("Eligible for refund.");
-  await expect(refundBox).toContainText(
-    " Single-ticket bookings qualify for a full refund.",
+  await viewBookingPage.refund();
+  await viewBookingPage.verifyRefundResult(
+    "Eligible for refund.",
+    "Single-ticket bookings qualify for a full refund.",
   );
 });
 
 test("Group ticket booking is NOT eligible for refund", async ({ page }) => {
-  /*await login(page, EMAIL, PASSWORD);
-  await expect(
-    page.getByRole("link", { name: "Browse Events →" }),
-  ).toBeVisible();*/
-
-  await page.locator("[data-testid='nav-home']").click();
-
   // Clicking book now for first event
-  const eventCard = page.locator("[data-testid='event-card']");
-  await eventCard.first().locator("#book-now-btn").click();
+  const poManager = new POManager(page);
+  const eventHomePage = poManager.getEventhubHomePage();
+  const eventBookingPage = poManager.getEventBookingPage();
+  const myBookingPage = poManager.getMyBookingPage();
+  const viewBookingPage = poManager.getViewBookingPage();
+
+  await eventHomePage.bookFirstEvent();
 
   //Filling details on booking page
+
   //By default ticket should be 1 so will change it for group by clicking +
-  const addMore = page.getByRole("button", { name: "+" });
+  await eventBookingPage.addMoreButton(3);
 
-  //1st click
-  await addMore.click();
-  //2nd click
-  await addMore.click();
+  expect(eventBookingPage.ticketLocator).toHaveText("3");
 
-  expect(page.locator("#ticket-count")).toHaveText("3");
-
-  await page.locator("#customerName").fill("Pranva Kumar");
-  await page.locator("#customer-email").fill("pranav69@gmail.com");
-  await page.getByPlaceholder("+91 98765 43210").fill("+91 6872209178");
-  await page.locator("#confirm-booking").click();
+  await eventBookingPage.bookingFill("Ayush", "ayush@gmail.com", "1234567898");
 
   //Verify booking confirmation
-  await expect(page.getByText("Booking Confirmed! 🎉")).toBeVisible();
+  await expect(eventBookingPage.bookingConfirmLocator).toBeVisible();
 
   //Navigating to My Booking page
-  await page.getByRole("button", { name: "View My Bookings" }).click();
+  await eventBookingPage.bookingDone();
 
   await expect(page).toHaveURL(
     "https://eventhub.rahulshettyacademy.com/bookings",
   );
 
   //Clicking the first View Details link
-  await page.getByRole("button", { name: "View Details" }).first().click();
+  await myBookingPage.firstViewDetail();
 
-  await expect(
-    page.getByRole("heading", { name: "Customer Details" }),
-  ).toBeVisible();
+  await expect(viewBookingPage.customeDetailsLocator).toBeVisible();
 
   //Storing Booking ref to a varibale
-  const bookingRefText = await page
-    .locator("span.font-mono.text-indigo-600")
-    .textContent();
-
-  const bookingRef = bookingRefText.trim();
+  const bookingRef = await viewBookingPage.bookingRefText();
 
   //Storing event title to a varibale
-  const eventTitleText = await page.locator("h1.text-gray-900").textContent();
-
-  const eventTitle = eventTitleText.trim();
+  const eventTitle = await viewBookingPage.eventTitleText();
 
   //First character of booking ref equals first character of event title
   expect(bookingRef.charAt(0)).toBe(eventTitle.charAt(0));
 
   //Check refund eligibility
-  await page.locator("[data-testid='check-refund-btn']").click();
-
-  //Refund text assertion
-  const refundBox = page.locator("#refund-result");
-  await expect(refundBox).toBeVisible();
-  await expect(refundBox).toContainText("Not eligible for refund.");
-  await expect(refundBox).toContainText(
+  await viewBookingPage.refund();
+  await viewBookingPage.verifyRefundResult(
+    "Not eligible for refund.",
     "Group bookings (3 tickets) are non-refundable.",
   );
 });
